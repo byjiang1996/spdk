@@ -1,0 +1,16 @@
+[test]
+filename=trtype=PCIe traddr=0000.00.02.0 ns=1
+size=700g
+io_size=${SZ}
+gtod_reduce=${THR}
+gtod_cpu=${THR}
+rw=${RW}
+ioengine=spdk
+direct=1
+thread=1
+iodepth=${DEPTH}
+numjobs=1
+bs=${BS}
+ramp_time=10ms
+interrupt_mode=${MODE}
+iodepth_batch_complete_min=${MIN}
