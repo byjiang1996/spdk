@@ -62,6 +62,8 @@ struct nvme_io_channel {
 	uint64_t		spin_ticks;
 	uint64_t		start_ticks;
 	uint64_t		end_ticks;
+
+	uint32_t		pending_cmd_cnt;
 };
 
 struct nvme_bdev_io {
@@ -189,7 +191,11 @@ bdev_nvme_poll(void *arg)
 		ch->start_ticks = spdk_get_ticks();
 	}
 
-	num_completions = spdk_nvme_qpair_process_completions(ch->qpair, 0);
+	num_completions = spdk_nvme_qpair_interrupt_completions(ch->qpair, ch->pending_cmd_cnt);
+
+	ch->pending_cmd_cnt -= num_completions;
+
+	//num_completions = spdk_nvme_qpair_process_completions(ch->qpair, 0);
 
 	if (ch->collect_spin_stat) {
 		if (num_completions > 0) {
@@ -284,6 +290,9 @@ _bdev_nvme_reset_create_qpair(struct spdk_io_channel_iter *i)
 	struct spdk_io_channel *_ch = spdk_io_channel_iter_get_channel(i);
 	struct nvme_io_channel *nvme_ch = spdk_io_channel_get_ctx(_ch);
 	struct spdk_nvme_io_qpair_opts opts;
+
+	// turn on interrupt mode
+	nvme_ctrlr_set_intr(ctrlr);
 
 	spdk_nvme_ctrlr_get_default_io_qpair_opts(ctrlr, &opts, sizeof(opts));
 	opts.delay_pcie_doorbell = true;
@@ -398,6 +407,9 @@ _bdev_nvme_submit_request(struct spdk_io_channel *ch, struct spdk_bdev_io *bdev_
 		return -1;
 	}
 
+	nvme_ch->pending_cmd_cnt++;
+	
+	SPDK_DEBUGLOG(SPDK_LOG_BDEV_NVME, "Type is: %d\n", bdev_io->type);
 	switch (bdev_io->type) {
 	case SPDK_BDEV_IO_TYPE_READ:
 		spdk_bdev_io_get_buf(bdev_io, bdev_nvme_get_buf_cb,
@@ -539,6 +551,9 @@ bdev_nvme_create_cb(void *io_device, void *ctx_buf)
 #else
 	ch->collect_spin_stat = false;
 #endif
+
+	// turn on interrupt mode
+	nvme_ctrlr_set_intr(ctrlr);
 
 	spdk_nvme_ctrlr_get_default_io_qpair_opts(ctrlr, &opts, sizeof(opts));
 	opts.delay_pcie_doorbell = true;
