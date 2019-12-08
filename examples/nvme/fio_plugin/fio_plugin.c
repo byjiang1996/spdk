@@ -77,6 +77,7 @@ struct spdk_fio_options {
 	int	apptag_mask;
 	char	*digest_enable;
 	int	enable_vmd;
+	int interrupt_mode;
 };
 
 struct spdk_fio_request {
@@ -133,7 +134,7 @@ struct spdk_fio_thread {
 	unsigned int		iocq_count;	/* number of iocq entries filled by last getevents */
 	unsigned int		iocq_size;	/* number of iocq entries allocated */
 	struct fio_file		*current_f;	/* fio_file given by user */
-
+	int			interrupt_mode;
 };
 
 static void *
@@ -244,6 +245,7 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 {
 	struct thread_data	*td = cb_ctx;
 	struct spdk_fio_thread	*fio_thread = td->io_ops_data;
+	struct spdk_fio_options *fio_options = td->eo;
 	struct spdk_nvme_io_qpair_opts	qpopts;
 	struct spdk_fio_ctrlr	*fio_ctrlr;
 	struct spdk_fio_qpair	*fio_qpair;
@@ -311,6 +313,9 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 		SPDK_ERRLOG("Cannot allocate space for fio_qpair\n");
 		return;
 	}
+
+	if (fio_options->interrupt_mode)
+		nvme_ctrlr_set_intr(fio_ctrlr->ctrlr);
 
 	spdk_nvme_ctrlr_get_default_io_qpair_opts(fio_ctrlr->ctrlr, &qpopts, sizeof(qpopts));
 	qpopts.delay_pcie_doorbell = true;
@@ -406,7 +411,7 @@ static int spdk_fio_setup(struct thread_data *td)
 
 	td->io_ops_data = fio_thread;
 	fio_thread->td = td;
-
+	fio_thread->interrupt_mode = fio_options->interrupt_mode;
 	fio_thread->iocq_size = td->o.iodepth;
 	fio_thread->iocq = calloc(fio_thread->iocq_size, sizeof(struct io_u *));
 	assert(fio_thread->iocq != NULL);
@@ -892,7 +897,10 @@ static int spdk_fio_getevents(struct thread_data *td, unsigned int min,
 		}
 
 		while (fio_qpair != NULL) {
-			spdk_nvme_qpair_process_completions(fio_qpair->qpair, max - fio_thread->iocq_count);
+			if (!fio_thread->interrupt_mode)
+				spdk_nvme_qpair_process_completions(fio_qpair->qpair, max - fio_thread->iocq_count);
+			else
+				spdk_nvme_qpair_interrupt_completions(fio_qpair->qpair, min - fio_thread->iocq_count);
 
 			if (fio_thread->iocq_count >= min) {
 				/* reset the currrent handling qpair */
@@ -1087,6 +1095,16 @@ static struct fio_option options[] = {
 		.category	= FIO_OPT_C_ENGINE,
 		.group		= FIO_OPT_G_INVALID,
 	},
+	{
+        .name		= "interrupt_mode",
+        .lname		= "Enable interrupt mode",
+        .type		= FIO_OPT_INT,
+        .off1		= offsetof(struct spdk_fio_options, interrupt_mode),
+        .def		= "0",
+        .help		= "Enable interrupt mode (interrupt_mode=1 or interrupt_mode=0)",
+        .category	= FIO_OPT_C_ENGINE,
+        .group		= FIO_OPT_G_INVALID,
+    },
 	{
 		.name		= NULL,
 	},
