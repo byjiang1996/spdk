@@ -2123,10 +2123,14 @@ nvme_ctrlr_process_init(struct spdk_nvme_ctrlr *ctrlr)
 			/*
 			 * Controller is currently enabled. We need to disable it to cause a reset.
 			 *
+			 * If CC.EN = 1 && CC.SHN = 1, then controller is shutdowned. We need to clear the 
+			 * 	shutdown bit
 			 * If CC.EN = 1 && CSTS.RDY = 0, the controller is in the process of becoming ready.
 			 *  Wait for the ready bit to be 1 before disabling the controller.
 			 */
-			if (csts.bits.rdy == 0) {
+			if (cc.bits.shn == 1)
+				cc.bits.shn = 0;
+			else if (csts.bits.rdy == 0) {
 				SPDK_DEBUGLOG(SPDK_LOG_NVME, "CC.EN = 1 && CSTS.RDY = 0 - waiting for reset to complete\n");
 				nvme_ctrlr_set_state(ctrlr, NVME_CTRLR_STATE_DISABLE_WAIT_FOR_READY_1, ready_timeout_in_ms);
 				return 0;
