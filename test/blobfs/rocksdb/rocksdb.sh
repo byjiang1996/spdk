@@ -41,12 +41,12 @@ timing_enter rocksdb
 
 timing_enter db_bench_build
 
-pushd $DB_BENCH_DIR
-if [ -z "$SKIP_GIT_CLEAN" ]; then
-	git clean -x -f -d
-fi
-$MAKE db_bench $MAKEFLAGS $MAKECONFIG DEBUG_LEVEL=0 SPDK_DIR=$rootdir
-popd
+# pushd $DB_BENCH_DIR
+# if [ -z "$SKIP_GIT_CLEAN" ]; then
+# 	git clean -x -f -d
+# fi
+# $MAKE db_bench $MAKEFLAGS $MAKECONFIG DEBUG_LEVEL=0 SPDK_DIR=$rootdir
+# popd
 
 timing_exit db_bench_build
 
@@ -59,7 +59,7 @@ trap 'run_bsdump; rm -f $ROCKSDB_CONF; exit 1' SIGINT SIGTERM EXIT
 
 if [ -z "$SKIP_MKFS" ]; then
 	timing_enter mkfs
-	$rootdir/test/blobfs/mkfs/mkfs $ROCKSDB_CONF Nvme0n1
+	$rootdir/test/blobfs/mkfs/mkfs $ROCKSDB_CONF Nvme0n1 &> t.txt
 	timing_exit mkfs
 fi
 
@@ -71,7 +71,7 @@ if [ $RUN_NIGHTLY -eq 1 ]; then
 	NUM_KEYS=100000000
 else
 	CACHE_SIZE=2048
-	DURATION=20
+	DURATION=1
 	NUM_KEYS=20000000
 fi
 
@@ -85,7 +85,7 @@ echo "--num=$NUM_KEYS" >> insert_flags.txt
 
 cp $testdir/common_flags.txt randread_flags.txt
 echo "--benchmarks=readrandom" >> randread_flags.txt
-echo "--threads=16" >> randread_flags.txt
+echo "--threads=1" >> randread_flags.txt
 echo "--duration=$DURATION" >> randread_flags.txt
 echo "--disable_wal=1" >> randread_flags.txt
 echo "--use_existing_db=1" >> randread_flags.txt
@@ -101,7 +101,7 @@ echo "--num=$NUM_KEYS" >> overwrite_flags.txt
 
 cp $testdir/common_flags.txt readwrite_flags.txt
 echo "--benchmarks=readwhilewriting" >> readwrite_flags.txt
-echo "--threads=4" >> readwrite_flags.txt
+echo "--threads=1" >> readwrite_flags.txt
 echo "--duration=$DURATION" >> readwrite_flags.txt
 echo "--disable_wal=1" >> readwrite_flags.txt
 echo "--use_existing_db=1" >> readwrite_flags.txt

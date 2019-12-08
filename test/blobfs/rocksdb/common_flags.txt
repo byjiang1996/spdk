@@ -9,7 +9,7 @@
 --bloom_bits=10
 --cache_numshardbits=4
 --open_files=500000
---verify_checksum=1
+--verify_checksum=0
 --db=/mnt/rocksdb
 --sync=0
 --compression_type=none

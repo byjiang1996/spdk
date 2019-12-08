@@ -3867,15 +3867,16 @@ spdk_bs_init(struct spdk_bs_dev *dev, struct spdk_bs_opts *o,
 	batch = spdk_bs_sequence_to_batch(seq, _spdk_bs_init_trim_cpl, ctx);
 
 	/* Clear metadata space */
-	spdk_bs_batch_write_zeroes_dev(batch, 0, num_md_lba);
+	// Remove this clear part, gem5 user should explictly clear the associated disk file to save time.
+	// spdk_bs_batch_write_zeroes_dev(batch, 0, num_md_lba);
 
-	if (opts.clear_method == BS_CLEAR_WITH_UNMAP) {
-		/* Trim data clusters */
-		spdk_bs_batch_unmap_dev(batch, num_md_lba, ctx->bs->dev->blockcnt - num_md_lba);
-	} else if (opts.clear_method == BS_CLEAR_WITH_WRITE_ZEROES) {
-		/* Write_zeroes to data clusters */
-		spdk_bs_batch_write_zeroes_dev(batch, num_md_lba, ctx->bs->dev->blockcnt - num_md_lba);
-	}
+	// if (opts.clear_method == BS_CLEAR_WITH_UNMAP) {
+	// 	/* Trim data clusters */
+	// 	spdk_bs_batch_unmap_dev(batch, num_md_lba, ctx->bs->dev->blockcnt - num_md_lba);
+	// } else if (opts.clear_method == BS_CLEAR_WITH_WRITE_ZEROES) {
+	// 	/* Write_zeroes to data clusters */
+	// 	spdk_bs_batch_write_zeroes_dev(batch, num_md_lba, ctx->bs->dev->blockcnt - num_md_lba);
+	// }
 
 	spdk_bs_batch_close(batch);
 }
