@@ -215,6 +215,13 @@ struct spdk_nvme_ctrlr_opts {
 	 * Defaults to 'false' (errors are logged).
 	 */
 	bool disable_error_logging;
+
+	/**
+	 * Enable interrupt in NVMe Completion Queue.
+	 *
+	 * Defaults to 'false' (interrupt disabled).
+	 */
+	bool interrupt_enabled;
 };
 
 /**
@@ -1177,6 +1184,31 @@ int32_t spdk_nvme_qpair_process_completions(struct spdk_nvme_qpair *qpair,
 		uint32_t max_completions);
 
 /**
+ * Process any outstanding completions by interrupt for I/O submitted on a queue pair.
+ *
+ * This call is blocking, i.e. it will wait until totally min_completions processes
+ * are ready at the time of this function call. It dowait for outstanding commands to finish.
+ *
+ * For each completed command, the request's callback function will be called if
+ * specified as non-NULL when the request was submitted.
+ *
+ * The caller must ensure that each queue pair is only used from one thread at a
+ * time.
+ *
+ * This function may be called at any point while the controller is attached to
+ * the SPDK NVMe driver.
+ *
+ * \sa spdk_nvme_cmd_cb
+ *
+ * \param qpair Queue pair to check for completions.
+ * \param min_completions Limit the number of completions to trigger one interrupt.
+ *
+ * \return number of completions processed (may be 0) or negated on error.
+ */
+int32_t spdk_nvme_qpair_interrupt_completions(struct spdk_nvme_qpair *qpair,
+		uint32_t min_completions);
+
+/**
  * Send the given admin command to the NVMe controller.
  *
  * This is a low level interface for submitting admin commands directly. Prefer
@@ -1566,6 +1598,15 @@ int spdk_nvme_ctrlr_format(struct spdk_nvme_ctrlr *ctrlr, uint32_t nsid,
 int spdk_nvme_ctrlr_update_firmware(struct spdk_nvme_ctrlr *ctrlr, void *payload, uint32_t size,
 				    int slot, enum spdk_nvme_fw_commit_action commit_action,
 				    struct spdk_nvme_status *completion_status);
+
+/**
+ * Set interrupt enabled in Completion Queue
+ *
+ * \param ctrlr NVMe controller to perform firmware operation on.
+ *
+ * \return 0 if successfully set, -1 if the default interrupt vector allocated is wrong.
+ */
+int nvme_ctrlr_set_intr(struct spdk_nvme_ctrlr *ctrlr);
 
 /**
  * Return virtual address of PCIe NVM I/O registers

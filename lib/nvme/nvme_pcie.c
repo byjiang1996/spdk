@@ -1490,6 +1490,12 @@ nvme_pcie_ctrlr_cmd_create_io_cq(struct spdk_nvme_ctrlr *ctrlr,
 	 * 0x1 = physically contiguous
 	 */
 	cmd->cdw11 = 0x1;
+	if (ctrlr->opts.interrupt_enabled)
+	{
+		cmd->cdw11 |= 0x2;
+		cmd->cdw11 |= io_que->id << 16; // set interrupt vector by default. Error may occur here...
+	}
+
 	cmd->dptr.prp.prp1 = pqpair->cpl_bus_addr;
 
 	return nvme_ctrlr_submit_admin_request(ctrlr, req);
@@ -2158,6 +2164,137 @@ nvme_pcie_qpair_process_completions(struct spdk_nvme_qpair *qpair, uint32_t max_
 		}
 
 		if (++num_completions == max_completions) {
+			break;
+		}
+	}
+
+	if (num_completions > 0) {
+		nvme_pcie_qpair_ring_cq_doorbell(qpair);
+	}
+
+	if (pqpair->flags.delay_pcie_doorbell) {
+		if (pqpair->last_sq_tail != pqpair->sq_tail) {
+			nvme_pcie_qpair_ring_sq_doorbell(qpair);
+			pqpair->last_sq_tail = pqpair->sq_tail;
+		}
+	}
+
+	if (spdk_unlikely(ctrlr->timeout_enabled)) {
+		/*
+		 * User registered for timeout callback
+		 */
+		nvme_pcie_qpair_check_timeout(qpair);
+	}
+
+	/* Before returning, complete any pending admin request. */
+	if (spdk_unlikely(nvme_qpair_is_admin_queue(qpair))) {
+		nvme_pcie_qpair_complete_pending_admin_request(qpair);
+
+		nvme_robust_mutex_unlock(&ctrlr->ctrlr_lock);
+	}
+
+	return num_completions;
+}
+
+int32_t
+nvme_pcie_qpair_interrupt_completions(struct spdk_nvme_qpair *qpair, uint32_t min_completions)
+{
+	struct nvme_pcie_qpair	*pqpair = nvme_pcie_qpair(qpair);
+	struct nvme_tracker	*tr;
+	struct spdk_nvme_cpl	*cpl, *next_cpl;
+	uint32_t		 num_completions = 0;
+	struct spdk_nvme_ctrlr	*ctrlr = qpair->ctrlr;
+	struct nvme_pcie_ctrlr *pctrlr = nvme_pcie_ctrlr(ctrlr);
+	uint16_t		 next_cq_head;
+	uint8_t			 next_phase;
+	bool			 next_is_valid = false;
+	uint16_t		 cq_ptr;
+
+	if (spdk_unlikely(nvme_qpair_is_admin_queue(qpair))) {
+		nvme_robust_mutex_lock(&ctrlr->ctrlr_lock);
+	}
+
+	// Currently, only support qid=1's interrupt
+	if (qpair->id != 1)
+		return nvme_pcie_qpair_process_completions(qpair, min_completions);
+
+	if (min_completions == 0)
+		return 0;
+
+
+	if (min_completions > pqpair->max_completions_cap) {
+		/*
+		 * min_completions == 0 means unlimited, but complete at most
+		 * max_completions_cap batch of I/O at a time so that the completion
+		 * queue doorbells don't wrap around.
+		 */
+		min_completions = pqpair->max_completions_cap;
+	}
+
+	cq_ptr = (pqpair->cq_head + min_completions) % pqpair->num_entries;
+
+	while (1) {
+		cpl = &pqpair->cpl[pqpair->cq_head];
+
+		if (!next_is_valid && cpl->status.p != pqpair->flags.phase) {
+			if (pqpair->flags.delay_pcie_doorbell)
+				if (pqpair->last_sq_tail != pqpair->sq_tail)
+					break;
+
+			if (spdk_pci_device_intr_read(pctrlr->devhandle, cq_ptr, qpair->id))
+			{
+				SPDK_ERRLOG("invalid input for cpl interrupt: %s; queue id is: %d\n", strerror(errno), qpair->id);
+				assert(0);
+			}
+
+			cpl = &pqpair->cpl[pqpair->cq_head];
+		}
+
+		if (spdk_likely(pqpair->cq_head + 1 != pqpair->num_entries)) {
+			next_cq_head = pqpair->cq_head + 1;
+			next_phase = pqpair->flags.phase;
+		} else {
+			next_cq_head = 0;
+			next_phase = !pqpair->flags.phase;
+		}
+		next_cpl = &pqpair->cpl[next_cq_head];
+		next_is_valid = (next_cpl->status.p == next_phase);
+		if (next_is_valid) {
+			__builtin_prefetch(&pqpair->tr[next_cpl->cid]);
+		}
+
+#ifdef __PPC64__
+		/*
+		 * This memory barrier prevents reordering of:
+		 * - load after store from/to tr
+		 * - load after load cpl phase and cpl cid
+		 */
+		spdk_mb();
+#elif defined(__aarch64__)
+		__asm volatile("dmb oshld" ::: "memory");
+#endif
+
+		if (spdk_unlikely(++pqpair->cq_head == pqpair->num_entries)) {
+			pqpair->cq_head = 0;
+			pqpair->flags.phase = !pqpair->flags.phase;
+		}
+
+		tr = &pqpair->tr[cpl->cid];
+		/* Prefetch the req's STAILQ_ENTRY since we'll need to access it
+		 * as part of putting the req back on the qpair's free list.
+		 */
+		__builtin_prefetch(&tr->req->stailq);
+		pqpair->sq_head = cpl->sqhd;
+
+		if (tr->req) {
+			nvme_pcie_qpair_complete_tracker(qpair, tr, cpl, true);
+		} else {
+			SPDK_ERRLOG("cpl does not map to outstanding cmd\n");
+			spdk_nvme_qpair_print_completion(qpair, cpl);
+			assert(0);
+		}
+
+		if (++num_completions == min_completions) {
 			break;
 		}
 	}

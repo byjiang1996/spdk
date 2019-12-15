@@ -1848,6 +1848,13 @@ nvme_rdma_qpair_process_completions(struct spdk_nvme_qpair *qpair,
 	return reaped;
 }
 
+int
+nvme_rdma_qpair_interrupt_completions(struct spdk_nvme_qpair *qpair, uint32_t min_completions)
+{
+	SPDK_ERRLOG("Unsupported Function: %s\n", __func__);
+	return -1;
+}
+
 uint32_t
 nvme_rdma_ctrlr_get_max_xfer_size(struct spdk_nvme_ctrlr *ctrlr)
 {

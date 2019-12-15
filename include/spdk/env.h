@@ -660,6 +660,7 @@ struct spdk_pci_device {
 		       void **mapped_addr, uint64_t *phys_addr, uint64_t *size);
 	int (*unmap_bar)(struct spdk_pci_device *dev, uint32_t bar,
 			 void *addr);
+	int (*intr_read)(struct spdk_pci_device *dev, void *value, uint32_t len);
 	int (*cfg_read)(struct spdk_pci_device *dev, void *value,
 			uint32_t len, uint32_t offset);
 	int (*cfg_write)(struct spdk_pci_device *dev, void *value,
@@ -945,6 +946,17 @@ void spdk_pci_device_detach(struct spdk_pci_device *device);
  */
 int spdk_pci_device_attach(struct spdk_pci_driver *driver, spdk_pci_enum_cb enum_cb,
 			   void *enum_ctx, struct spdk_pci_addr *pci_address);
+
+/**
+ * Batch read PCI interrupt events until cq_tail reaches cq_ptr.
+ *
+ * \param dev PCI device.
+ * \param cq_ptr Completion queue pointer waited.
+ * \param cqid Completion queue id.
+ *
+ * \return 0 on success, -1 on failure.
+ */
+int spdk_pci_device_intr_read(struct spdk_pci_device *dev, uint16_t cq_ptr, uint16_t cqid);
 
 /**
  * Read \c len bytes from the PCI configuration space.

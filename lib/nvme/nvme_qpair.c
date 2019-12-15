@@ -464,6 +464,54 @@ spdk_nvme_qpair_process_completions(struct spdk_nvme_qpair *qpair, uint32_t max_
 	return ret;
 }
 
+int32_t
+spdk_nvme_qpair_interrupt_completions(struct spdk_nvme_qpair *qpair, uint32_t min_completions)
+{
+	int32_t ret;
+	struct nvme_request *req, *tmp;
+
+	if (qpair->ctrlr->is_failed) {
+		nvme_qpair_abort_reqs(qpair, 1 /* do not retry */);
+		return 0;
+	}
+
+	if (spdk_unlikely(!nvme_qpair_check_enabled(qpair) && !qpair->is_connecting)) {
+		/*
+		 * qpair is not enabled, likely because a controller reset is
+		 *  in progress.
+		 */
+		return 0;
+	}
+
+	/* error injection for those queued error requests */
+	if (spdk_unlikely(!STAILQ_EMPTY(&qpair->err_req_head))) {
+		STAILQ_FOREACH_SAFE(req, &qpair->err_req_head, stailq, tmp) {
+			if (spdk_get_ticks() - req->submit_tick > req->timeout_tsc) {
+				STAILQ_REMOVE(&qpair->err_req_head, req, nvme_request, stailq);
+				nvme_qpair_manual_complete_request(qpair, req,
+								   req->cpl.status.sct,
+								   req->cpl.status.sc, 0, true);
+			}
+		}
+	}
+
+	qpair->in_completion_context = 1;
+	ret = nvme_transport_qpair_interrupt_completions(qpair, min_completions);
+	if (ret < 0) {
+		SPDK_ERRLOG("CQ error, abort requests after transport retry counter exceeded\n");
+		qpair->ctrlr->is_failed = true;
+	}
+	qpair->in_completion_context = 0;
+	if (qpair->delete_after_completion_context) {
+		/*
+		 * A request to delete this qpair was made in the context of this completion
+		 *  routine - so it is safe to delete it now.
+		 */
+		spdk_nvme_ctrlr_free_io_qpair(qpair);
+	}
+	return ret;
+}
+
 int
 nvme_qpair_init(struct spdk_nvme_qpair *qpair, uint16_t id,
 		struct spdk_nvme_ctrlr *ctrlr,

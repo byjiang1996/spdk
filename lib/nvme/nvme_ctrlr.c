@@ -85,6 +85,13 @@ nvme_ctrlr_get_cmbsz(struct spdk_nvme_ctrlr *ctrlr, union spdk_nvme_cmbsz_regist
 					      &cmbsz->raw);
 }
 
+int
+nvme_ctrlr_set_intr(struct spdk_nvme_ctrlr *ctrlr)
+{
+	ctrlr->opts.interrupt_enabled = true;
+	return 0;
+}
+
 volatile struct spdk_nvme_registers *
 spdk_nvme_ctrlr_get_registers(struct spdk_nvme_ctrlr *ctrlr)
 {

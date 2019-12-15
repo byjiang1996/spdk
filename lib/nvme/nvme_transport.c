@@ -228,6 +228,12 @@ nvme_transport_qpair_process_completions(struct spdk_nvme_qpair *qpair, uint32_t
 	NVME_TRANSPORT_CALL(qpair->trtype, qpair_process_completions, (qpair, max_completions));
 }
 
+int32_t
+nvme_transport_qpair_interrupt_completions(struct spdk_nvme_qpair *qpair, uint32_t min_completions)
+{
+	NVME_TRANSPORT_CALL(qpair->trtype, qpair_interrupt_completions, (qpair, min_completions));
+}
+
 void
 nvme_transport_admin_qpair_abort_aers(struct spdk_nvme_qpair *qpair)
 {

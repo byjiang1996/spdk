@@ -168,34 +168,36 @@ function get_virtio_names_from_bdf {
 }
 
 function configure_linux_pci {
-	local driver_path=""
-	driver_name=""
-	if [[ -n "${DRIVER_OVERRIDE}" ]]; then
-		driver_path="${DRIVER_OVERRIDE%/*}"
-		driver_name="${DRIVER_OVERRIDE##*/}"
-		# path = name -> there is no path
-		if [[ "$driver_path" = "$driver_name" ]]; then
-			driver_path=""
-		fi
-	elif [[ -n "$(ls /sys/kernel/iommu_groups)" || \
-	     (-e /sys/module/vfio/parameters/enable_unsafe_noiommu_mode && \
-	     "$(cat /sys/module/vfio/parameters/enable_unsafe_noiommu_mode)" == "Y") ]]; then
-		driver_name=vfio-pci
-	elif modinfo uio_pci_generic >/dev/null 2>&1; then
-		driver_name=uio_pci_generic
-	elif [[ -r "$rootdir/dpdk/build/kmod/igb_uio.ko" ]]; then
-		driver_path="$rootdir/dpdk/build/kmod/igb_uio.ko"
-		driver_name="igb_uio"
-		modprobe uio
-		echo "WARNING: uio_pci_generic not detected - using $driver_name"
-	else
-		echo "No valid drivers found [vfio-pci, uio_pci_generic, igb_uio]. Please either enable the vfio-pci or uio_pci_generic"
-		echo "kernel modules, or have SPDK build the igb_uio driver by running ./configure --with-igb-uio-driver and recompiling."
-		return 1
-	fi
+	local driver_path_dependency="/root/byuio.ko" # need to specify the location
+	local driver_path="/root/byuio_pci_generic.ko" # need to specify the location
+	driver_name="byuio_pci_generic"
+	# if [[ -n "${DRIVER_OVERRIDE}" ]]; then
+	# 	driver_path="${DRIVER_OVERRIDE%/*}"
+	# 	driver_name="${DRIVER_OVERRIDE##*/}"
+	# 	# path = name -> there is no path
+	# 	if [[ "$driver_path" = "$driver_name" ]]; then
+	# 		driver_path=""
+	# 	fi
+	# elif [[ -n "$(ls /sys/kernel/iommu_groups)" || \
+	#      (-e /sys/module/vfio/parameters/enable_unsafe_noiommu_mode && \
+	#      "$(cat /sys/module/vfio/parameters/enable_unsafe_noiommu_mode)" == "Y") ]]; then
+	# 	driver_name=vfio-pci
+	# elif modinfo uio_pci_generic >/dev/null 2>&1; then
+	# 	driver_name=uio_pci_generic
+	# elif [[ -r "$rootdir/dpdk/build/kmod/igb_uio.ko" ]]; then
+	# 	driver_path="$rootdir/dpdk/build/kmod/igb_uio.ko"
+	# 	driver_name="igb_uio"
+	# 	modprobe uio
+	# 	echo "WARNING: uio_pci_generic not detected - using $driver_name"
+	# else
+	# 	echo "No valid drivers found [vfio-pci, uio_pci_generic, igb_uio]. Please either enable the vfio-pci or uio_pci_generic"
+	# 	echo "kernel modules, or have SPDK build the igb_uio driver by running ./configure --with-igb-uio-driver and recompiling."
+	# 	return 1
+	# fi
 
 	# modprobe assumes the directory of the module. If the user passes in a path, we should use insmod
 	if [[ -n "$driver_path" ]]; then
+		insmod $driver_path_dependency || true
 		insmod $driver_path || true
 	else
 		modprobe $driver_name

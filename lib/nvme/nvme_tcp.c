@@ -1587,6 +1587,13 @@ nvme_tcp_qpair_process_completions(struct spdk_nvme_qpair *qpair, uint32_t max_c
 	return reaped;
 }
 
+int
+nvme_tcp_qpair_interrupt_completions(struct spdk_nvme_qpair *qpair, uint32_t min_completions)
+{
+	SPDK_ERRLOG("Unsupported Function: %s\n", __func__);
+	return -1;
+}
+
 static int
 nvme_tcp_qpair_icreq_send(struct nvme_tcp_qpair *tqpair)
 {

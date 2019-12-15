@@ -30,6 +30,8 @@ void pci_uio_free_resource(struct rte_pci_device *dev,
 int pci_uio_map_resource_by_index(struct rte_pci_device *dev, int res_idx,
 		struct mapped_pci_resource *uio_res, int map_idx);
 
+int pci_uio_read_intr(const struct rte_intr_handle *intr_handle,
+			void *buf, size_t len);
 int pci_uio_read_config(const struct rte_intr_handle *intr_handle,
 			void *buf, size_t len, off_t offs);
 int pci_uio_write_config(const struct rte_intr_handle *intr_handle,

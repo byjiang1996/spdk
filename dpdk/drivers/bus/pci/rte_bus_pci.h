@@ -252,6 +252,22 @@ RTE_PMD_EXPORT_NAME(nm, __COUNTER__)
 void rte_pci_unregister(struct rte_pci_driver *driver);
 
 /**
+ * Read PCI interrupt events (block waiting interrupts).
+ *
+ * @param device
+ *   A pointer to a rte_pci_device structure describing the device
+ *   to use
+ * @param buf
+ *   A data buffer where the bytes should be read into
+ * @param len
+ *   The length of the data buffer.
+ * @return
+ *  Number of bytes read on success, negative on error.
+ */
+int rte_pci_read_intr(const struct rte_pci_device *device,
+		void *buf, size_t len);
+
+/**
  * Read PCI config space.
  *
  * @param device

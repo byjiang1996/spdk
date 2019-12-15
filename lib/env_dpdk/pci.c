@@ -75,6 +75,12 @@ spdk_unmap_bar_rte(struct spdk_pci_device *device, uint32_t bar, void *addr)
 }
 
 static int
+spdk_intr_read_rte(struct spdk_pci_device *dev, void *value, uint32_t len)
+{
+	return rte_pci_read_intr(dev->dev_handle, value, len);
+}
+
+static int
 spdk_cfg_read_rte(struct spdk_pci_device *dev, void *value, uint32_t len, uint32_t offset)
 {
 	int rc;
@@ -337,6 +343,7 @@ spdk_pci_device_init(struct rte_pci_driver *_drv,
 
 	dev->map_bar = spdk_map_bar_rte;
 	dev->unmap_bar = spdk_unmap_bar_rte;
+	dev->intr_read = spdk_intr_read_rte;
 	dev->cfg_read = spdk_cfg_read_rte;
 	dev->cfg_write = spdk_cfg_write_rte;
 	dev->detach = spdk_detach_rte;
@@ -601,6 +608,14 @@ int
 spdk_pci_device_get_socket_id(struct spdk_pci_device *dev)
 {
 	return dev->socket_id;
+}
+
+int
+spdk_pci_device_intr_read(struct spdk_pci_device *dev, uint16_t cq_ptr, uint16_t cqid)
+{
+	uint32_t buf = cq_ptr;
+	buf |= 1 << 24;
+	return dev->intr_read(dev, &buf, cqid);
 }
 
 int

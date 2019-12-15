@@ -64,6 +64,7 @@ enum rte_kernel_driver {
 	RTE_KDRV_UIO_GENERIC,
 	RTE_KDRV_NIC_UIO,
 	RTE_KDRV_NONE,
+	RTE_KDRV_BYUIO_GENERIC,
 };
 
 /**
